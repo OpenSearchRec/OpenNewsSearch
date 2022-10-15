@@ -1,0 +1,8 @@
+OpenSearchRec
+pandas
+newspaper3k
+langdetect
+sentence-transformers
+Flask
+rapidfuzz
+gunicorn

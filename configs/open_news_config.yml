@@ -1,0 +1,44 @@
+version: 1
+
+news_index_name: news_us_en
+
+allowed_language_codes: # which languages to index, list of ISO 639-1 language codes
+    - en
+
+news_sources:
+    New York Times:
+        domain: https://www.nytimes.com
+    New York Post:
+        domain: https://www.nypost.com
+    CNN:
+        domain: https://www.cnn.com
+    Fox News:
+        domain: https://www.foxnews.com
+    The Washington Post:
+        domain: https://www.washingtonpost.com
+    The Hill:
+        domain: https://thehill.com/
+    Market Watch:
+        domain: https://www.marketwatch.com
+    Politico:
+        domain: https://www.politico.com
+    Washington Examiner:
+        domain: https://www.washingtonexaminer.com
+    News Week:
+        domain: https://www.newsweek.com
+    TechCrunch:
+        domain: https://techcrunch.com
+    CNET:
+        domain: https://www.cnet.com
+    Axios:
+        domain: https://www.axios.com
+    Ars Technica:
+        domain: https://arstechnica.com/
+    Wired:
+        domain: https://www.wired.com
+    Engadget:
+        domain: https://www.engadget.com
+
+news_analysis:
+    max_days_difference_for_non_zero_article_similarity: 1.5
+    

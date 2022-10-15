@@ -1,0 +1,91 @@
+<html>
+    <head>
+        <title>OpenNewsSearch</title>
+        <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.1/themes/base/jquery-ui.css">
+        <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+        <script src="https://code.jquery.com/ui/1.13.1/jquery-ui.js"></script>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script> 
+    </head>
+    <body>
+        <div class="container py-5">
+            <h1>OpenNewsSearch - Home</h1>
+            <br>
+
+            <div class="row">
+                <div class="">
+                    <form action="search">
+                        <div class="input-group">
+                            <input class="autocomplete form-control border-end-0 border shadow-none" type="search" placeholder="Search" name="q" value="{{q}}">
+                            <input  type="hidden" id="previous_query" name="previous_query" value="{{q}}">
+                            <button type="submit" class="btn btn-primary">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
+                                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                                </svg>
+
+                            </button>
+       
+                        </div>
+
+
+
+                    </form>
+                </div>
+            </div>
+            <div class="card-deck ">
+                {% for hit in hits %}
+                    <div class="card mb-3 rounded-0 " >
+                        <div class="row g-0">
+                            <div class="col-lg-4 d-flex justify-content-center justify-content-lg-start">
+                            <a href='{{hit['item'].get("extra_information", {}).get("article_url", "") }}' target="_blank">
+                                <img src="{{hit['item'].get("extra_information", {}).get("top_image", "") }}" style="height: 300px;" class="img-fluid " >
+                            </a>
+                            </div>
+                            <div class="col-lg-8">
+                                <div class="card-body">
+                                    <p class="card-text">                            
+                                        <a href='{{hit['item'].get("extra_information", {}).get("article_url", "") }}' target="_blank">{{hit['item'].get("text_fields", {}).get("article_title", "") }}</a>
+                                        <br>{{hit['item'].get("extra_information", {}).get("article_url", "") }}
+                                    </p>
+                                    <p class="card-text">
+                                        {% if debugging %}
+                                            <br> Retrieval Score: {{hit["score"]}}
+                                            <br> ID: {{hit["id"]}}
+                                            <br> authors: {{hit["item"].get("text_fields", {}).get("article_authors", "") }}
+                                            <br> article_text_beginning: {{hit["item"].get("text_fields", {}).get("article_text_beginning", "") }}
+                                            <br> article_entities: {{hit["item"].get("text_fields", {}).get("article_entities", "") }}
+                                            <br> first_indexed_date: {{hit["item"].get("date_fields", {}).get("first_indexed_date", "") }}
+                                            <br> centrality_score_3: {{hit["item"].get("numeric_fields", {}).get("centrality_score_3", "") }}
+                                            <br> centrality_score_half: {{hit["item"].get("numeric_fields", {}).get("centrality_score_half", "") }}
+                                            <br> centrality_score_15: {{hit["item"].get("numeric_fields", {}).get("centrality_score_15", "") }}
+                                            <br> centrality_score_all: {{hit["item"].get("numeric_fields", {}).get("centrality_score_all", "") }}
+                                            <br> article_centroid_tags: {{hit['item'].get("categorical_fields", {}).get("article_centroid_tags", "") }}
+                                            <br> relevance_rank: {{hit["item"].get("extra_information", {}).get("relevance_rank", "") }}
+                                        {% endif %}
+                                        {% if hit['item'].get("extra_information", {}).get("similar_articles", []) | length > 0 %}
+                                            {% for similar in hit['item'].get("extra_information", {}).get("similar_articles", [])%}
+                                                {% if similar['similarity'] > 0.2 %}
+                                                    <br><a href="{{similar['url']}}" target="_blank">{{similar["title"]}}</a>
+                                                    <br>{{similar['url']}}
+                                                    {% if debugging %}
+                                                        <br>{{similar['similarity']}}
+                                                    {% endif %}
+                                                {% endif %}
+                                            {% endfor %}            
+                                        {% endif %}           
+
+                                    </p>
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            {{hit['item'].get("date_fields", {}).get("publish_date", "") }}
+                                        </small>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}            
+            </div>
+        </div>
+    </body>
+</html>

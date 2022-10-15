@@ -1,0 +1,169 @@
+<html>
+    <head>
+        <title>OpenNewsSearch</title>
+        <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.1/themes/base/jquery-ui.css">
+        <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+        <script src="https://code.jquery.com/ui/1.13.1/jquery-ui.js"></script>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script> 
+    </head>
+    <body>
+        <div class="container py-5">
+            <div class="row">
+                <p>
+                    <a href="/">Home</a> | <a href="/about">About</a>
+
+                </p>
+            </div>
+            <h1>Search - Open News Search</h1>
+            <br>
+            <div class="row">
+                <div class="">
+                    <form action="search">
+                        <div class="input-group">
+                            <input class="autocomplete form-control border-end-0 border shadow-none" type="search" placeholder="Search" name="q" value="{{q}}">
+                            <input  type="hidden" id="previous_query" name="previous_query" value="{{q}}">
+                            <button type="submit" class="btn btn-primary">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
+                                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                                </svg>
+
+                            </button>
+       
+                        </div>
+                        <br>
+
+                        <div class="btn-group">
+                            <input type="radio" class="btn-check" name="search_type" id="timeline" value="timeline"  autocomplete="off"  {{search_type_timeline}}>
+                            <label class="btn btn-primary" for="timeline">News Timeline Search</label>
+
+                            <input type="radio" class="btn-check" name="search_type" id="news_search" value="news_search" autocomplete="off" {{search_type_news_search}}>
+                            <label class="btn btn-primary" for="news_search"> News Search - Non Chronological </label>
+                        </div>
+                        
+                        <br>
+                        <br>
+                        <div class="btn-group">
+                            <input type="radio" class="btn-check" name="matching_strictness" id="very_strict_matching" value="very_strict_matching"  autocomplete="off"  {{very_strict_matching}}>
+                            <label class="btn btn-primary" for="very_strict_matching">Very Strict Matching</label>
+                            
+                            <input type="radio" class="btn-check" name="matching_strictness" id="strict_matching" value="strict_matching"  autocomplete="off"  {{strict_matching}}>
+                            <label class="btn btn-primary" for="strict_matching">Strict Matching</label>
+
+                            <input type="radio" class="btn-check" name="matching_strictness" id="lenient_matching" value="lenient_matching" autocomplete="off" {{lenient_matching}}>
+                            <label class="btn btn-primary" for="lenient_matching">Lenient Matching</label>
+                            
+                            <input type="radio" class="btn-check" name="matching_strictness" id="very_lenient_matching" value="very_lenient_matching" autocomplete="off" {{very_lenient_matching}}>
+                            <label class="btn btn-primary" for="very_lenient_matching">Very Lenient Matching</label>
+                        </div>
+                        <br><br>
+                        Target Date: <input type="text" name="target_date_boost" id="target_date_boost" value="{{target_date_boost}}"> &nbsp; (boost articles from close to the target date, target date is today by default)
+                        <br><br>
+                        Minimum Date Filter: <input type="text" name="min_date" id="min_date" value="{{min_date}}">
+                        <br><br>
+                        Maximum Date Filter: <input type="text" name="max_date" id="max_date" value="{{max_date}}">
+                        <!-- <br><br>
+                        Maximum Number of Results: <input type="number" name="max_num_results" id="max_num_results" min=1 max=1000 value="{{max_num_results}}"> -->
+                    </form>
+                </div>
+            </div>
+
+            <script>
+                $( function() {
+                    $("#target_date_boost").datepicker({"dateFormat": "yy-mm-dd"});
+                    $("#min_date").datepicker({"dateFormat": "yy-mm-dd"});
+                    $("#max_date").datepicker({"dateFormat": "yy-mm-dd"});
+                });
+            </script>
+
+            {% if search_type_timeline %}
+                <div>
+                    <br>
+                    <label for="number_of_results" class="form-label">Number of results to display (lower scoring news items will be filtered out first, chronological order is maintained)</label>
+                    <input type="range" class="form-range" id="number_of_results" min=1 max={{num_results}} value={{num_results}} step=1>
+                    Number of results displayed: <span id="number_of_results_displayed">{{initial_number_of_results_to_show}}</span>
+                    <br>
+                    Total number of results returned: {{num_results}}
+                    <script>
+                        function show_top_k_results(num_results_to_show) {
+                            $("#number_of_results_displayed").text(num_results_to_show);
+                            $(".news_item").show()
+                            for (var i = num_results_to_show; i < {{num_results}}; i++) {
+                                // console.log('[data-rank="'+i+'"]')
+                                $('[data-rank="'+i+'"]').hide();
+                            }
+                        }
+                        $( function() {
+                            $("#number_of_results").change(function(value) {
+                                var num_results_to_show = $(this).val();
+                                show_top_k_results(num_results_to_show)
+                            });
+                        });
+                        $( document ).ready(function() {
+                            show_top_k_results({{initial_number_of_results_to_show}});
+                            $("#number_of_results").val({{initial_number_of_results_to_show}})
+                        });
+                    </script>
+                </div>
+
+            {% else%}
+                Total number of results returned: {{num_results}}
+
+            {% endif %}
+            <div class="card-deck ">
+                {{message}}
+                {% for hit in hits %}
+                    <div class="card mb-3 rounded-0 news_item" data-rank="{{hit['item'].get('extra_information', {}).get('relevance_rank', 0)}}">
+                        <div class="row g-0">
+                            <div class="col-lg-4 d-flex justify-content-center justify-content-lg-start">
+                            <a href='{{hit["item"].get("extra_information", {}).get("article_url", "") }}' target="_blank">
+                                <img src="{{hit["item"].get("extra_information", {}).get("top_image", "") }}" style="height: 300px;" class="img-fluid " >
+                            </a>
+                            </div>
+                            <div class="col-lg-8">
+                                <div class="card-body">
+                                    <p class="card-text">                            
+                                        <a href='{{hit["item"].get("extra_information", {}).get("article_url", "") }}' target="_blank">{{hit["item"].get("text_fields", {}).get("article_title", "") }}</a>
+                                        <br>{{hit["item"].get("extra_information", {}).get("article_url", "") }}
+                                    </p>
+                                    <p class="card-text">
+                                        {% if debugging %}
+                                            <br> Retrieval Score: {{hit["score"]}}
+                                            <br> ID: {{hit["id"]}}
+                                            <br> authors: {{hit["item"].get("text_fields", {}).get("article_authors", "") }}
+                                            <br> article_text_beginning: {{hit["item"].get("text_fields", {}).get("article_text_beginning", "") }}
+                                            <br> first_indexed_date: {{hit["item"].get("date_fields", {}).get("first_indexed_date", "") }}
+                                            <br> centrality_score_3: {{hit["item"].get("numeric_fields", {}).get("centrality_score_3", "") }}
+                                            <br> centrality_score_half: {{hit["item"].get("numeric_fields", {}).get("centrality_score_half", "") }}
+                                            <br> centrality_score_15: {{hit["item"].get("numeric_fields", {}).get("centrality_score_15", "") }}
+                                            <br> centrality_score_all: {{hit["item"].get("numeric_fields", {}).get("centrality_score_all", "") }}
+                                            <br> article_centroid_tags: {{hit['item'].get("categorical_fields", {}).get("article_centroid_tags", "") }}
+                                            <br> relevance_rank: {{hit["item"].get("extra_information", {}).get("relevance_rank", "") }}
+                                        {% endif %}
+                                        {% if hit['item'].get("extra_information", {}).get("similar_articles", []) | length > 0 %}
+                                            {% for similar in hit['item'].get("extra_information", {}).get("similar_articles", [])%}
+                                                {% if similar['similarity'] > 0.2 %}
+                                                    <br><a href="{{similar['url']}}" target="_blank">{{similar["title"]}}</a>
+                                                    <br>{{similar['url']}}
+                                                    {% if debugging %}
+                                                        <br>{{similar['similarity']}}
+                                                    {% endif %}
+                                                {% endif %}
+                                            {% endfor %}            
+                                        {% endif %}
+
+                                    </p>
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            {{hit["item"].get("date_fields", {}).get("publish_date", "") }}
+                                        </small>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}            
+            </div>
+        </div>
+    </body>
+</html>

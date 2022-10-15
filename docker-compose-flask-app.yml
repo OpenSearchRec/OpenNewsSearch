@@ -1,0 +1,15 @@
+version: '3'
+services: 
+  open_news_search_flask_app:
+    build:
+        context: .
+        dockerfile: Dockerfile
+    environment:
+      - database_type=$opensearchrec_database_type
+      - elasticsearch_host=$opensearchrec_database_url
+      - elasticsearch_username=$opensearchrec_database_username
+      - elasticsearch_password=$opensearchrec_database_password
+      - elasticsearch_verify_certificates=$elasticsearch_verify_certificates
+      - code_url=$code_url
+    command: gunicorn -w 2 -b 0.0.0.0:5000 OpenNews.flask_app.news_ui:app 
+    network_mode: "host"

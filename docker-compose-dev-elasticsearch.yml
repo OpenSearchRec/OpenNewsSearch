@@ -1,0 +1,17 @@
+version: '3'
+services: 
+  open_news_search_news_elasticsearch:
+    image: elasticsearch:8.4.0
+    environment:
+      - network.host=0.0.0.0
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - ELASTIC_USERNAME=$opensearchrec_database_username
+      - ELASTIC_PASSWORD=$opensearchrec_database_password
+      - xpack.security.enabled=true
+      - cluster.routing.allocation.disk.watermark.low=2gb
+      - cluster.routing.allocation.disk.watermark.high=1gb
+      - cluster.routing.allocation.disk.watermark.flood_stage=512mb
+    network_mode: "host"
+    volumes:
+      - ./elasticsearch:/usr/share/elasticsearch/data

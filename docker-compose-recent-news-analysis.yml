@@ -1,0 +1,13 @@
+version: '3'
+services: 
+  open_news_search_recent_news_analyzer:
+        build: .
+        environment:
+          - opensearchrec_database_type=$opensearchrec_database_type
+          - opensearchrec_database_url=$opensearchrec_database_url
+          - opensearchrec_database_username=$opensearchrec_database_username
+          - opensearchrec_database_password=$opensearchrec_database_password
+          - elasticsearch_verify_certificates=$elasticsearch_verify_certificates
+        command: python -m OpenNews.analysis.news_analysis --max_num_days_back=2 --repeat_analysis_in_infinite_loop --config_filepath=configs/open_news_config.yml
+        network_mode: "host"
+    

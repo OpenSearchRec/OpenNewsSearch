@@ -1,0 +1,14 @@
+version: '3'
+services: 
+  opennewssearch_news_crawler:
+    build:
+        context: .
+        dockerfile: Dockerfile
+    environment:
+      - opensearchrec_database_type=$opensearchrec_database_type
+      - opensearchrec_database_url=$opensearchrec_database_url
+      - opensearchrec_database_username=$opensearchrec_database_username
+      - opensearchrec_database_password=$opensearchrec_database_password
+      - elasticsearch_verify_certificates=$elasticsearch_verify_certificates
+    command: python -m OpenNews.ingestion.crawl_and_index_current_news --config_filepath=configs/open_news_config.yml --repeat_crawl_in_infinite_loop
+    network_mode: "host"
