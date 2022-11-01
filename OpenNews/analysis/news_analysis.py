@@ -8,6 +8,8 @@ import numpy as np
 from sklearn.feature_extraction.text import  CountVectorizer, TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 
+from sentence_transformers import SentenceTransformer
+
 from OpenSearchRec.retrieval import (
     ElasticSearchRetrievalClientSettings,
     ElasticSearchRetrievalClient,
@@ -15,13 +17,15 @@ from OpenSearchRec.retrieval import (
     SearchItem
 )
 
-from OpenSearchRec.post_ranking import (
-    select_items_greedily_and_with_similarity_suppression,
-    select_top_k_centroids
-)
-
 
 from OpenNews.utils.entity_extraction import get_entity_token_list
+
+
+from OpenNews.analysis.news_analysis_utils import *
+
+
+embedding_model = SentenceTransformer("all-mpnet-base-v2")
+
 
 use_generic_news_data_for_idf = True
 
@@ -88,229 +92,78 @@ def get_all_articles_in_time_interval(
     return article_list
 
 
-def compute_articles_tfidf_matrix(articles_list, article_texts):
 
 
-    # article_titles = [a.item["text_fields"]["article_title"] for a in articles_list]
-    # article_texts = [a.item["text_fields"]["article_text"] for a in articles_list]
 
-    # print("article_texts", article_texts)
-    text_parsing_args = {
-        "strip_accents": "unicode",
-        "lowercase": True,
-        "ngram_range": (1, 1)
-    }
-
-    if not use_generic_news_data_for_idf:
-        tfidf_vectorizer = TfidfVectorizer(
-            **text_parsing_args,
-            smooth_idf=True,
-            analyzer="word",
-        )
-        return tfidf_vectorizer.fit_transform(article_texts)
-
-    count_vect = CountVectorizer(
-        **text_parsing_args
-    )
-    count_vect.fit(article_texts)  # use the actual articles to determine the vocabulary
-    tfidf_vectorizer = TfidfVectorizer(
-        **text_parsing_args,
-        smooth_idf=True,
-        analyzer="word",
-    )
-    tfidf_vectorizer.fit(generic_news_data) # use the generic news data to determine idf term
-    return tfidf_vectorizer.transform(article_texts)
-
-def compute_article_similarity_matrix(
+def compute_composite_compute_article_similarity_matrix(
         articles_list,
-        features_matrix,
+        article_title_entities,
+        article_text_entities,
         similarity_multiplier_for_different_articles_from_same_source=0,
-        min_similarity_percentile_for_non_zero=75):
-
-    similarities = linear_kernel(features_matrix, features_matrix)
-
-    if similarity_multiplier_for_different_articles_from_same_source is not None:
-        article_sources = [
-            a.item["categorical_fields"]["article_normalized_domain_name"]
-            for a in articles_list
-        ]
-        for i in range(len(article_sources)):
-            for j in range(i + 1, len(article_sources)):
-                if (i != j) and (article_sources[i] == article_sources[j]):
-                    similarities[i, j] *= similarity_multiplier_for_different_articles_from_same_source
-                    similarities[j, i] *= similarity_multiplier_for_different_articles_from_same_source
-
-    if min_similarity_percentile_for_non_zero is not None:
-        non_diagonal_similarities = np.copy(similarities)
-        non_diagonal_similarities[np.diag_indices_from(non_diagonal_similarities)] = 0
-        min_similarity_value = np.percentile(non_diagonal_similarities, [min_similarity_percentile_for_non_zero])
-        similarities[similarities < min_similarity_value] = 0
-
-    similarities[similarities < 0] = 0
-    similarities[similarities > 1] = 1
-
-    return similarities
+        min_similarity_percentile_for_non_zero=75,
+        logger=False):
 
 
-def compute_centrality_scores(
-        articles_list,
-        article_similarity_matrix):
-
-    article_sources = np.array([
-        a.item["categorical_fields"]["article_normalized_domain_name"]
+    article_title_and_text_beginning = [
+        " ".join([a.item["text_fields"]["article_title"]]) + a.item["text_fields"]["article_text_beginning"]
         for a in articles_list
-    ])
-
-    sources_list = list(set(article_sources))
-
-    # for each article, compute the most similar for each other source
-    article_to_most_similar_per_source_list = [[] for _ in articles_list]
-    for a_idx, article in enumerate(articles_list):
-        for source_name in sources_list:
-            if article_sources[a_idx] != source_name:
-                articles_with_source_idxes = article_sources==source_name
-                most_similar_article_score = np.max(article_similarity_matrix[a_idx, articles_with_source_idxes])
-                # print("most_similar_article_score", most_similar_article_score)
-                article_to_most_similar_per_source_list[a_idx].append(most_similar_article_score)
-
-    for a_idx in range(len(article_to_most_similar_per_source_list)):
-        article_to_most_similar_per_source_list[a_idx].sort(reverse=True)
+    ]
+    article_titles = [a.item["text_fields"]["article_title"] for a in articles_list]
+    article_texts = [a.item["text_fields"]["article_text"] for a in articles_list]
     
-    centrality_score_3 = [
-        np.mean(most_similar_per_source[:3]) for most_similar_per_source in article_to_most_similar_per_source_list
-    ]
-    centrality_score_10 = [
-        np.mean(most_similar_per_source[:10]) for most_similar_per_source in article_to_most_similar_per_source_list
-    ]
-    centrality_score_15 = [
-        np.mean(most_similar_per_source[:15]) for most_similar_per_source in article_to_most_similar_per_source_list
-    ]
 
-    half_num_sources = int(np.ceil(len(sources_list) / 2))
-    centrality_score_half = [
-        np.mean(most_similar_per_source[:half_num_sources]) for most_similar_per_source in article_to_most_similar_per_source_list
-    ]
-
-    centrality_score_all = [
-        np.mean(most_similar_per_source) for most_similar_per_source in article_to_most_similar_per_source_list
-    ]
-
-    return {
-        "centrality_score_3": centrality_score_3,
-        "centrality_score_10": centrality_score_10,
-        "centrality_score_15": centrality_score_15,
-        "centrality_score_half": centrality_score_half,
-        "centrality_score_all": centrality_score_all
-    }
+    # TF-IDF
+    article_title_and_text_beginning_tfidf_matrix = compute_articles_tfidf_matrix(articles_list, article_title_and_text_beginning)
+    article_similarity_matrix = \
+        compute_article_similarity_matrix(
+            articles_list,
+            article_title_and_text_beginning_tfidf_matrix,
+            similarity_multiplier_for_different_articles_from_same_source=0,
+            min_similarity_percentile_for_non_zero=min_similarity_percentile_for_non_zero)
 
 
-def compute_most_similar_articles(
-        articles_list,
-        article_similarity_matrix):
-
-    article_sources = np.array([
-        a.item["categorical_fields"]["article_normalized_domain_name"]
-        for a in articles_list
-    ])
-
-    sources_list = list(set(article_sources))
+    # Entity Extraction
+    article_title_entities_tfidf_matrix = compute_articles_tfidf_matrix(articles_list, article_title_entities)
+    article_text_entities_tfidf_matrix = compute_articles_tfidf_matrix(articles_list, article_text_entities)
     
-    article_to_most_similar_per_source_idx_list = [[] for _ in articles_list]
-    article_to_most_similar_per_source_score_list = [[] for _ in articles_list]
-    for a_idx, article in enumerate(articles_list):
-        for source_name in sources_list:
-            # print("\n\nsource_name", source_name)
-            if article_sources[a_idx] != source_name:
-                articles_with_source_idxes = (article_sources==source_name)*1
-                # print("articles_with_source_idxes", articles_with_source_idxes)
-                similarity_scores_from_source = article_similarity_matrix[a_idx]*articles_with_source_idxes
-                most_similar_article_score = np.max(similarity_scores_from_source)
-                most_similar_article_idx = np.argmax(similarity_scores_from_source)
 
-                if most_similar_article_score > 0:
-                    # print("articles_with_source_idxes", articles_with_source_idxes)
-                    # print("similarity_scores_from_source", similarity_scores_from_source)
-                    # print("most_similar_article_idx", most_similar_article_idx)
-                    # print("most_similar_article_score", most_similar_article_score)
+    article_title_entity_similarity_matrix = \
+        compute_article_similarity_matrix(
+            articles_list,
+            article_title_entities_tfidf_matrix,
+            similarity_multiplier_for_different_articles_from_same_source=0,
+            min_similarity_percentile_for_non_zero=min_similarity_percentile_for_non_zero)
 
-                    assert most_similar_article_idx not in article_to_most_similar_per_source_idx_list[a_idx]
+    article_text_entity_similarity_matrix = \
+        compute_article_similarity_matrix(
+            articles_list,
+            article_text_entities_tfidf_matrix,
+            similarity_multiplier_for_different_articles_from_same_source=0,
+            min_similarity_percentile_for_non_zero=min_similarity_percentile_for_non_zero)
 
-                    article_to_most_similar_per_source_idx_list[a_idx].append(most_similar_article_idx)
-                    article_to_most_similar_per_source_score_list[a_idx].append(most_similar_article_score)
-
-    article_to_most_similar_per_source_title_list = []
-    article_to_most_similar_per_source_url_list = []
-    for most_similar_idxes in article_to_most_similar_per_source_idx_list:
-        titles = []
-        for idx in most_similar_idxes:
-            titles.append(articles_list[idx].item["text_fields"]["article_title"])
-        article_to_most_similar_per_source_title_list.append(titles)
-        
-        urls = []
-        for idx in most_similar_idxes:
-            urls.append(articles_list[idx].item["extra_information"]["article_url"])
-        article_to_most_similar_per_source_url_list.append(urls)
-
-    similar_articles = []
-    for a_idx in range(len(article_to_most_similar_per_source_score_list)):
-        scores = article_to_most_similar_per_source_score_list[a_idx]
-        idxes = article_to_most_similar_per_source_idx_list[a_idx]
-        titles = article_to_most_similar_per_source_title_list[a_idx]
-        urls = article_to_most_similar_per_source_url_list[a_idx]
-        combined = list(zip(scores, idxes, titles, urls))
-        # print("combined", combined)
-        combined.sort(reverse=True)
-        # print("combined", combined)
-        # print("list(zip(*combined))", list(zip(*combined)))
-        similar_articles.append([
-            {
-                "similarity": float(a[0]),
-                "id": articles_list[int(a[1])].id,
-                "title": a[2],
-                "url": a[3]
-            } for a in combined
-        ])
-
-        if len(article_to_most_similar_per_source_score_list[a_idx]) > 0:
-            scores, idxes, titles, urls = list(zip(*combined))
-            article_to_most_similar_per_source_score_list[a_idx] = scores
-            article_to_most_similar_per_source_idx_list[a_idx] = idxes
-            article_to_most_similar_per_source_title_list[a_idx] = titles
-            article_to_most_similar_per_source_url_list[a_idx] = urls
+    entity_similarity_matrix = (article_title_entity_similarity_matrix + article_text_entity_similarity_matrix) / (2 + 1e-12)
 
 
+    # Semantic Embeddings
+    article_title_semantic_embeddings = [embedding_model.encode(title).tolist() for title in article_titles]
+    article_sementic_embedding_similarity_matrix = \
+        compute_article_similarity_matrix(
+            articles_list,
+            article_title_semantic_embeddings,
+            similarity_multiplier_for_different_articles_from_same_source=0,
+            min_similarity_percentile_for_non_zero=min_similarity_percentile_for_non_zero)
 
-    return {
-        "article_to_most_similar_per_source_idx_list": article_to_most_similar_per_source_idx_list,
-        "article_to_most_similar_per_source_title_list": article_to_most_similar_per_source_title_list,
-        "article_to_most_similar_per_source_url_list": article_to_most_similar_per_source_url_list,
-        "article_to_most_similar_per_source_score_list": article_to_most_similar_per_source_score_list,
-        "similar_articles": similar_articles
-    }
+    # Combine Similarity Matrices
+    tf_idf_weight = 1
+    entity_weight = 1
+    title_semantic_embedding_weight = 1
+    combined_article_similarity_matrix = (
+        article_similarity_matrix * tf_idf_weight + \
+        entity_similarity_matrix * entity_weight + \
+        article_sementic_embedding_similarity_matrix * title_semantic_embedding_weight) / (
+            tf_idf_weight + entity_weight + title_semantic_embedding_weight + 1e-12)
 
-
-def compute_centroids_tags(
-        articles_list,
-        articles_scores,
-        article_similarity_matrix,
-        k_list=[5, 10, 20, 50]):
-
-    centroid_tags = [[] for _ in articles_list]
-
-    for k in k_list:
-        if len(articles_list) > k * 5:
-            centroids_results = \
-                select_top_k_centroids(
-                    num_centroids=k,
-                    items_similarity_matrix=np.array(article_similarity_matrix),
-                    items_weights=np.array(articles_scores),
-                    run_input_validation=False)
-            centroid_idx_list = centroids_results["sorted_centroid_idx_list"]
-            # centroid_scores_list = centroids_results["sorted_centroid_scores_list"]
-            for centroid_idx in centroid_idx_list:
-                centroid_tags[centroid_idx].append(f"centroid_k{k}")
-
-    return centroid_tags
+    return combined_article_similarity_matrix
 
 
 
@@ -347,6 +200,7 @@ def perform_news_analysis(
 
 
     if len(articles_list) > 10 and len(sources_list) > 1:
+        
         article_title_and_text_beginning = [
             " ".join([a.item["text_fields"]["article_title"]]) + a.item["text_fields"]["article_text_beginning"]
             for a in articles_list
@@ -365,40 +219,15 @@ def perform_news_analysis(
             # print(article_title_entities[-1])
         if logger: logger.info("done extracting entities")
 
-        article_title_and_text_beginning_tfidf_matrix = compute_articles_tfidf_matrix(articles_list, article_title_and_text_beginning)
-        article_title_entities_tfidf_matrix = compute_articles_tfidf_matrix(articles_list, article_title_entities)
-        article_text_entities_tfidf_matrix = compute_articles_tfidf_matrix(articles_list, article_text_entities)
-        
-        article_similarity_matrix = \
-            compute_article_similarity_matrix(
+        combined_article_similarity_matrix = \
+            compute_composite_compute_article_similarity_matrix(
                 articles_list,
-                article_title_and_text_beginning_tfidf_matrix,
+                article_title_entities,
+                article_text_entities,
                 similarity_multiplier_for_different_articles_from_same_source=0,
-                min_similarity_percentile_for_non_zero=95)
-        
-        article_title_entity_similarity_matrix = \
-            compute_article_similarity_matrix(
-                articles_list,
-                article_title_entities_tfidf_matrix,
-                similarity_multiplier_for_different_articles_from_same_source=0,
-                min_similarity_percentile_for_non_zero=95)
+                min_similarity_percentile_for_non_zero=90,
+                logger=logger)
 
-        article_text_entity_similarity_matrix = \
-            compute_article_similarity_matrix(
-                articles_list,
-                article_text_entities_tfidf_matrix,
-                similarity_multiplier_for_different_articles_from_same_source=0,
-                min_similarity_percentile_for_non_zero=95)
-
-        # article_similarity_matrix_strict = \
-        #     compute_article_similarity_matrix(
-        #         articles_list,
-        #         article_title_and_text_beginning_tfidf_matrix,
-        #         similarity_multiplier_for_different_articles_from_same_source=0,
-        #         min_similarity_percentile_for_non_zero=98)
-
-        combined_article_similarity_matrix = (article_similarity_matrix + article_title_entity_similarity_matrix + article_text_entity_similarity_matrix) / (3.0 + 1e-12)
-        
         # print("combined_article_similarity_matrix.min()", combined_article_similarity_matrix.min(), flush=True)
         # print("combined_article_similarity_matrix.min() >= 0", combined_article_similarity_matrix.min() >= 0, flush=True)
         

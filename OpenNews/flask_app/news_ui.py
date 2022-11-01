@@ -99,7 +99,8 @@ def home():
                 "categorical_field_name": "article_centroid_tags",
                 "values_list": [
                     # "centroid_k5", "centroid_k10", "centroid_k20", "centroid_k50", 
-                    "centroid_k20", 
+                    # "centroid_k20", 
+                    "centroid_k50",
                 ],
                 "score_multiplier": 0,
                 "minimum_should_match": 1,
